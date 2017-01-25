@@ -4,9 +4,10 @@
 #include <std_msgs/String.h>
 #include <std_msgs/Int32.h>
 #include <nav_msgs/Odometry.h>
-#include <tf/tfMessage.h>
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/TransformStamped.h>
+#include <tf/transform_broadcaster.h>
+#include <tf/tf.h>
 
 // FRC Stuff
 #include <RobotDrive.h>
@@ -52,8 +53,6 @@ constexpr const char* MxpResourceOS = "/dev/ttyS1";
  *
  *
  */
-
-
 const double PI = 3.14159265359;
 
 class DiffDriveController
@@ -101,11 +100,11 @@ class EncoderOdometry: public rosfrc::Updater
 private:
 	std::shared_ptr<frc::Encoder> m_left;
 	std::shared_ptr<frc::Encoder> m_right;
-	ros::Publisher odom_pub, tf_pub;
 	nav_msgs::Odometry odom_msg;
-	tf::tfMessage tf_msg;
+	geometry_msgs::TransformStamped odom_transform;
+	tf::TransformBroadcaster tf_broadcaster;
+	ros::Publisher odom_pub;
 	frc::Timer timer;
-	static geometry_msgs::Quaternion yawToQuat(double angle);
 	bool first_update;
 	double wheel_seperation;
 	ros::NodeHandle& m_nh;
@@ -122,7 +121,6 @@ EncoderOdometry::EncoderOdometry(ros::NodeHandle& nh, const char* topic, std::sh
 		m_left(left_encoder),
 		m_right(right_encoder),
 		odom_pub(topic, &odom_msg),
-		tf_pub("/tf", &tf_msg),
 		first_update(true),
 		wheel_seperation(wheel_sep),
 		m_nh(nh),
@@ -152,13 +150,11 @@ EncoderOdometry::EncoderOdometry(ros::NodeHandle& nh, const char* topic, std::sh
 	odom_msg.twist.covariance[28] = 1000000.0;  // Rotation Y
 	odom_msg.twist.covariance[36] = 0.01;       // Rotation Z
 
-	tf_msg.transforms_length = 1;
-	tf_msg.transforms = new geometry_msgs::TransformStamped[1];
-	tf_msg.transforms->child_frame_id = odom_msg.child_frame_id;
-	tf_msg.transforms->header.frame_id = odom_msg.header.frame_id;
+	odom_transform.header.frame_id = "odom";
+	odom_transform.child_frame_id = "base_link";
 
+	tf_broadcaster.init(nh);
 	nh.advertise(odom_pub);
-	nh.advertise(tf_pub);
 }
 void EncoderOdometry::update()
 {
@@ -192,29 +188,18 @@ void EncoderOdometry::update()
 	odom_msg.header.stamp = m_nh.now();
 	odom_msg.pose.pose.position.x = x;
 	odom_msg.pose.pose.position.y = y;
-	odom_msg.pose.pose.orientation = yawToQuat(th);
+	odom_msg.pose.pose.orientation = tf::createQuaternionFromYaw(th);
 	odom_msg.twist.twist.linear.x = vx;
 	odom_msg.twist.twist.linear.y = vy;
 	odom_msg.twist.twist.angular.z = vth;
 
-	tf_msg.transforms->header.stamp = odom_msg.header.stamp;
-	tf_msg.transforms->transform.translation.x = odom_msg.pose.pose.position.x;
-	tf_msg.transforms->transform.translation.y = odom_msg.pose.pose.position.y;
-	tf_msg.transforms->transform.rotation = odom_msg.pose.pose.orientation;
+	odom_transform.header.stamp = odom_msg.header.stamp;
+	odom_transform.transform.translation.x = odom_msg.pose.pose.position.x;
+	odom_transform.transform.translation.y = odom_msg.pose.pose.position.y;
+	odom_transform.transform.rotation = odom_msg.pose.pose.orientation;
 
 	odom_pub.publish(&odom_msg);
-	tf_pub.publish(&tf_msg);
-}
-geometry_msgs::Quaternion EncoderOdometry::yawToQuat(double angle)
-{
-	geometry_msgs::Quaternion quat;
-	double COS_HEADING = std::cos(angle/2.0);
-	double SIN_HEADING = std::sin(angle/2.0);
-	quat.x = 0.0;
-	quat.y = 0.0;
-	quat.z = SIN_HEADING;
-	quat.w = COS_HEADING;
-	return quat;
+	tf_broadcaster.sendTransform(odom_transform);
 }
 void EncoderOdometry::Reset()
 {
@@ -298,6 +283,7 @@ public:
 	EncoderOdometry odom;
 	DiffDriveController ctrl;
 	Servo servo;
+	Counter c;
 	Robot():
 			RosRobot("10.41.18.94"),
 			stickLeft(new frc::Joystick(0)),
@@ -323,14 +309,16 @@ public:
 			right_controller(new PIDController(p, i, d, DRIVE_CONTROLLER_KF, encoder_right_front.get(), &right_motors)),
 			odom(getNodeHandle(), "/odom", encoder_left_front, encoder_right_front, 0.5588),
 			ctrl(getNodeHandle(), "/cmd_vel", left_controller, right_controller, 0.5588),
-			servo(6)
+			servo(6),
+			c(7)
 	{
 		encoder_left_front->SetDistancePerPulse(DISTANCE_PER_CYCLE_METERS);
 		encoder_left_front->SetPIDSourceType(PIDSourceType::kRate);
 		encoder_left_front->SetReverseDirection(true);
 		encoder_right_front->SetDistancePerPulse(DISTANCE_PER_CYCLE_METERS);
 		encoder_right_front->SetPIDSourceType(PIDSourceType::kRate);
-
+		left_controller->SetInputRange(-MAX_LINEAR_VELOCITY_METERS_PER_SECOND, MAX_LINEAR_VELOCITY_METERS_PER_SECOND);
+		right_controller->SetInputRange(-MAX_LINEAR_VELOCITY_METERS_PER_SECOND, MAX_LINEAR_VELOCITY_METERS_PER_SECOND);
 		BL->SetSafetyEnabled(false);
 		BR->SetSafetyEnabled(false);
 		FL->SetSafetyEnabled(false);
@@ -347,7 +335,6 @@ public:
 		AddSpeedController("/speed_controllers/BR", BR);
 		AddSpeedController("/speed_controllers/TestOne", TestOne);
 		AddSpeedController("/speed_controllers/TestTwo", TestTwo);
-		AddEncoder("/encoder_left", encoder_left_front);
 		AddEncoder("/encoder_right", encoder_right_front);
 		AddPIDController("/left_wheels_vel", left_controller);
 		AddPIDController("/right_wheels_vel", right_controller)
@@ -355,6 +342,7 @@ public:
 		AddGyro("/gyro", gyro);
 		*/
 		AddUpdater(&odom);
+		AddEncoder("/encoder_left", encoder_left_front);
 	}
 
 	void AutonomousInit() override
@@ -402,7 +390,7 @@ public:
 		right_controller->Disable();
 		ctrl.Disable();
 #endif
-		odom.Reset();
+		//odom.Reset();
 		getNodeHandle().loginfo("Teleop Begin");
 	}
 	void TeleopPeriodic() override
@@ -439,7 +427,7 @@ public:
 		double speed = stickRight->GetY();
 		TestOne->Set(speed);
 		TestTwo->Set(speed);
-
+		std::cout << "Counter: " << c.Get() << std::endl;
 		double servo_scale = stickRight->GetZ();
 		servo.Set(servo_scale);
 	}
