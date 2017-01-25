@@ -259,6 +259,7 @@ private:
 	const double MAX_LINEAR_VELOCITY_METERS_PER_SECOND = 5.4;
 	const double MAX_ANGULAR_VELOCITY = 6.0;
 	const double DRIVE_CONTROLLER_KF = 1.0 / MAX_LINEAR_VELOCITY_METERS_PER_SECOND;
+	const double WHEEL_SEPERATION_METERS = 0.3048;
 public:
 	std::shared_ptr<frc::Joystick> stickLeft;
 	std::shared_ptr<frc::Joystick> stickMiddle;
@@ -307,8 +308,8 @@ public:
 			d(0.325),
 			left_controller(new PIDController(p, i, d, DRIVE_CONTROLLER_KF, encoder_left_front.get(), &left_motors)),
 			right_controller(new PIDController(p, i, d, DRIVE_CONTROLLER_KF, encoder_right_front.get(), &right_motors)),
-			odom(getNodeHandle(), "/odom", encoder_left_front, encoder_right_front, 0.5588),
-			ctrl(getNodeHandle(), "/cmd_vel", left_controller, right_controller, 0.5588),
+			odom(getNodeHandle(), "/odom", encoder_left_front, encoder_right_front, WHEEL_SEPERATION_METERS),
+			ctrl(getNodeHandle(), "/cmd_vel", left_controller, right_controller, WHEEL_SEPERATION_METERS),
 			servo(6),
 			c(7)
 	{
@@ -342,7 +343,7 @@ public:
 		AddGyro("/gyro", gyro);
 		*/
 		AddUpdater(&odom);
-		AddEncoder("/encoder_left", encoder_left_front);
+		//AddEncoder("/encoder_left", encoder_left_front);
 	}
 
 	void AutonomousInit() override
