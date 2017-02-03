@@ -22,8 +22,12 @@
 #include <Counter.h>
 #include <PIDController.h>
 #include <SpeedController.h>
+#include <I2C.h>
 #include <memory>
 #include <cmath>
+
+#include <thread>
+#include <chrono>
 
 /*
 constexpr const char* OnboardResourceVISA = "ASRL1::INSTR";
@@ -53,6 +57,166 @@ constexpr const char* MxpResourceOS = "/dev/ttyS1";
  *
  *
  */
+
+class LidarLite
+{
+private:
+	enum VALUES {
+		RESET = 0x00,
+		MEASURE_UNCORRECTED = 0x03,
+		MEASURE_CORRECTED = 0x04
+	};
+	enum REGISTERS {
+		STATUS = 0x01,
+		ACQ_COMMAND = 0x00,
+		DISTANCE = 0x08,
+		SIG_COUNT_VAL = 0x02,
+		ACQ_CONFIG_REG = 0x04,
+		THRESHOLD_BYPASS = 0x1c
+	};
+	const uint8_t STATUS_REGISTER = 0x01;
+	const unsigned int TIMEOUT_MILISECONDS = 200;
+	bool WaitForAvailable();
+	bool Busy();
+	frc::I2C device;
+public:
+	LidarLite(frc::I2C::Port port=frc::I2C::Port::kOnboard, int device=0x62);
+	bool SetAddress(uint8_t serialnumber, int address);
+	bool Reset();
+	bool configure(int config=0);
+	int GetDistance(bool corrected=true);
+
+};
+bool LidarLite::WaitForAvailable()
+{
+	auto timeout = std::chrono::steady_clock::now() + std::chrono::milliseconds(TIMEOUT_MILISECONDS);
+	while (std::chrono::steady_clock::now() < timeout)
+	{
+		if (!Busy()) return true;
+	}
+	printf("Wait for not busy timed out line %d\n", __LINE__);
+	return false;
+}
+bool LidarLite::Busy()
+{
+	uint8_t statusWrite = REGISTERS::STATUS;
+	uint8_t statusRead = 0;
+	if(device.WriteBulk(&statusWrite, 1)) printf("Write failed at %d", __LINE__);
+	if(device.ReadOnly(1, &statusRead)) printf("Read failed at %d", __LINE__);
+	return statusRead & 0x01;
+}
+LidarLite::LidarLite(frc::I2C::Port port, int device) :
+		device(port, device)
+{
+
+}
+/*------------------------------------------------------------------------------
+  Configure
+
+  Selects one of several preset configurations.
+
+  Parameters
+  ------------------------------------------------------------------------------
+  configuration:  Default 0.
+    0: Default mode, balanced performance.
+    1: Short range, high speed. Uses 0x1d maximum acquisition count.
+    2: Default range, higher speed short range. Turns on quick termination
+        detection for faster measurements at short range (with decreased
+        accuracy)
+    3: Maximum range. Uses 0xff maximum acquisition count.
+    4: High sensitivity detection. Overrides default valid measurement detection
+        algorithm, and uses a threshold value for high sensitivity and noise.
+    5: Low sensitivity detection. Overrides default valid measurement detection
+        algorithm, and uses a threshold value for low sensitivity and noise.
+  lidarliteAddress: Default 0x62. Fill in new address here if changed. See
+    operating manual for instructions.
+------------------------------------------------------------------------------*/
+bool LidarLite::configure(int configuration)
+{
+	  switch (configuration)
+	  {
+	    case 0: // Default mode, balanced performance
+	      device.Write(0x02,0x80); // Default
+	      device.Write(0x04,0x08); // Default
+	      device.Write(0x1c,0x00); // Default
+	    break;
+
+	    case 1: // Short range, high speed
+	      device.Write(0x02,0x1d);
+	      device.Write(0x04,0x08); // Default
+	      device.Write(0x1c,0x00); // Default
+	    break;
+
+	    case 2: // Default range, higher speed short range
+	      device.Write(0x02,0x80); // Default
+	      device.Write(0x04,0x00);
+	      device.Write(0x1c,0x00); // Default
+	    break;
+
+	    case 3: // Maximum range
+	      device.Write(0x02,0xff);
+	      device.Write(0x04,0x08); // Default
+	      device.Write(0x1c,0x00); // Default
+	    break;
+
+	    case 4: // High sensitivity detection, high erroneous measurements
+	      device.Write(0x02,0x80); // Default
+	      device.Write(0x04,0x08); // Default
+	      device.Write(0x1c,0x80);
+	    break;
+
+	    case 5: // Low sensitivity detection, low erroneous measurements
+	      device.Write(0x02,0x80); // Default
+	      device.Write(0x04,0x08); // Default
+	      device.Write(0x1c,0xb0);
+	    break;
+	  }
+	  return false;
+}
+bool LidarLite::SetAddress(uint8_t serialnumber, int address)
+{
+	uint8_t res[2];
+	if (device.Read(0x16, 1, &res[0])) return true; // Get Serial high byte
+	if (device.Read(0x17, 1, &res[1])) return true; // Get serial low byte
+	if (device.Write(0x18, res[0])) return true;   // Write first byte of serial number
+	if (device.Write(0x19, res[1])) return true;   // Write second bye of serial number
+	if (device.Write(0x1a, address)) return true;
+	if (device.Write(0x1e, 0x08)) return true;
+	return false;
+}
+bool LidarLite::Reset()
+{
+	return device.Write(REGISTERS::ACQ_COMMAND, VALUES::RESET);
+}
+int LidarLite::GetDistance(bool corrected)
+{
+	if(!WaitForAvailable()) return -1;
+	if (corrected)
+	{
+		//if (device.Write(0x00, 0x04)) return -1;
+		if(device.Write(REGISTERS::ACQ_COMMAND, VALUES::MEASURE_CORRECTED))
+		{
+			printf("Write failed at line %d\n", __LINE__);
+			return -1;
+		}
+	}
+	else
+	{
+		if (device.Write(REGISTERS::ACQ_COMMAND, VALUES::MEASURE_UNCORRECTED))
+		{
+			printf("Write failed at line %d\n", __LINE__);
+			return -1;
+		}
+	}
+	if(!WaitForAvailable()) return -1;
+	uint8_t readRegister = REGISTERS::DISTANCE;
+	if(device.WriteBulk(&readRegister, 1)) printf("Write failed at %d\n", __LINE__);
+	uint8_t distanceRead[2];
+	if(device.ReadOnly(2, distanceRead)) printf("Read failed at line %d\n", __LINE__);
+	unsigned int distance = (unsigned int)(distanceRead[0]<<8) + (unsigned int)(distanceRead[1]);
+	return distance;
+}
+
 const double PI = 3.14159265359;
 
 class DiffDriveController
@@ -284,7 +448,8 @@ public:
 	EncoderOdometry odom;
 	DiffDriveController ctrl;
 	Servo servo;
-	Counter c;
+	//Counter c;
+	LidarLite ll;
 	Robot():
 			RosRobot("10.41.18.94"),
 			stickLeft(new frc::Joystick(0)),
@@ -297,7 +462,7 @@ public:
 			TestOne(new Victor(4)),
 			TestTwo(new Victor(5)),
 			accel(new BuiltInAccelerometer()),
-			encoder_left_front(new Encoder(1, 4)),
+			encoder_left_front(new Encoder(7, 8)),
 			encoder_right_front(new Encoder(2, 5)),
 			gyro(new ADXRS450_Gyro()),
 			drive(*FL, *BL, *FR, *BR),
@@ -311,7 +476,8 @@ public:
 			odom(getNodeHandle(), "/odom", encoder_left_front, encoder_right_front, WHEEL_SEPERATION_METERS),
 			ctrl(getNodeHandle(), "/cmd_vel", left_controller, right_controller, WHEEL_SEPERATION_METERS),
 			servo(6),
-			c(7)
+			//c(7),
+			ll(frc::I2C::Port::kMXP, 0x62)
 	{
 		encoder_left_front->SetDistancePerPulse(DISTANCE_PER_CYCLE_METERS);
 		encoder_left_front->SetPIDSourceType(PIDSourceType::kRate);
@@ -342,8 +508,9 @@ public:
 		AddAccelerometer("/accel", accel);
 		AddGyro("/gyro", gyro);
 		*/
+		//ll.configure(1);
 		AddUpdater(&odom);
-		//AddEncoder("/encoder_left", encoder_left_front);
+		AddEncoder("/encoder_left", encoder_left_front);
 	}
 
 	void AutonomousInit() override
@@ -425,16 +592,24 @@ public:
 	}
 	void TestPeriodic() override
 	{
+		/*
 		double speed = stickRight->GetY();
 		TestOne->Set(speed);
 		TestTwo->Set(speed);
-		std::cout << "Counter: " << c.Get() << std::endl;
+		*/
+		std::stringstream s;
+		//s << "Counter:" << c.Get() << std::endl;
+		//getNodeHandle().loginfo(s.str().c_str());
 		double servo_scale = stickRight->GetZ();
 		servo.Set(servo_scale);
 	}
 	void RobotPeriodic () override
 	{
-
+		std::stringstream s;
+		int ping = ll.GetDistance();
+		if (ping < 0) s << "Error reading lidar";
+		else s << "Lidar: " << ping;
+		getNodeHandle().loginfo(s.str().c_str());
 	}
 };
 
