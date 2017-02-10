@@ -11,8 +11,7 @@
 
 // FRC Stuff
 #include <RobotDrive.h>
-#include <Talon.h>
-#include <Victor.h>
+#include <VictorSP.h>
 #include <Encoder.h>
 #include <Servo.h>
 #include <BuiltInAccelerometer.h>
@@ -22,6 +21,7 @@
 #include <Counter.h>
 #include <PIDController.h>
 #include <SpeedController.h>
+#include <Servo.h>
 #include <I2C.h>
 #include <memory>
 #include <cmath>
@@ -101,9 +101,11 @@ bool LidarLite::Busy()
 {
 	uint8_t statusWrite = REGISTERS::STATUS;
 	uint8_t statusRead = 0;
+
 	if(device.WriteBulk(&statusWrite, 1)) printf("Write failed at %d", __LINE__);
 	if(device.ReadOnly(1, &statusRead)) printf("Read failed at %d", __LINE__);
-	return statusRead & 0x01;
+	printf("Status at line %d %0x, bit0=%0x\n", __LINE__, statusRead, statusRead & (unsigned char)0x01);
+	return statusRead & ((unsigned char) 0x01);
 }
 LidarLite::LidarLite(frc::I2C::Port port, int device) :
 		device(port, device)
@@ -193,10 +195,13 @@ int LidarLite::GetDistance(bool corrected)
 	if(!WaitForAvailable()) return -1;
 	if (corrected)
 	{
+		uint8_t commandWrite[2];
+		commandWrite[0] = REGISTERS::ACQ_COMMAND;
+		commandWrite[1] = VALUES::MEASURE_CORRECTED;
 		//if (device.Write(0x00, 0x04)) return -1;
-		if(device.Write(REGISTERS::ACQ_COMMAND, VALUES::MEASURE_CORRECTED))
+		if (device.WriteBulk(commandWrite, 2))
 		{
-			printf("Write failed at line %d\n", __LINE__);
+			printf("Write failed at line%d\n", __LINE__);
 			return -1;
 		}
 	}
@@ -204,7 +209,7 @@ int LidarLite::GetDistance(bool corrected)
 	{
 		if (device.Write(REGISTERS::ACQ_COMMAND, VALUES::MEASURE_UNCORRECTED))
 		{
-			printf("Write failed at line %d\n", __LINE__);
+			printf("Line %d just failed\n", __LINE__);
 			return -1;
 		}
 	}
@@ -213,7 +218,7 @@ int LidarLite::GetDistance(bool corrected)
 	if(device.WriteBulk(&readRegister, 1)) printf("Write failed at %d\n", __LINE__);
 	uint8_t distanceRead[2];
 	if(device.ReadOnly(2, distanceRead)) printf("Read failed at line %d\n", __LINE__);
-	unsigned int distance = (unsigned int)(distanceRead[0]<<8) + (unsigned int)(distanceRead[1]);
+	int distance = (unsigned int)(distanceRead[0]<<8) + (unsigned int)(distanceRead[1]);
 	return distance;
 }
 
@@ -423,17 +428,18 @@ private:
 	const double MAX_LINEAR_VELOCITY_METERS_PER_SECOND = 5.4;
 	const double MAX_ANGULAR_VELOCITY = 6.0;
 	const double DRIVE_CONTROLLER_KF = 1.0 / MAX_LINEAR_VELOCITY_METERS_PER_SECOND;
-	const double WHEEL_SEPERATION_METERS = 0.3048;
+	const double WHEEL_SEPERATION_METERS = 0.6096;
 public:
 	std::shared_ptr<frc::Joystick> stickLeft;
 	std::shared_ptr<frc::Joystick> stickMiddle;
 	std::shared_ptr<frc::Joystick> stickRight;
-	std::shared_ptr<frc::Talon> BL;
-	std::shared_ptr<frc::Talon> BR;
-	std::shared_ptr<frc::Talon> FL;
-	std::shared_ptr<frc::Talon> FR;
-	std::shared_ptr<frc::Victor> TestOne;
-	std::shared_ptr<frc::Victor> TestTwo;
+	std::shared_ptr<frc::VictorSP> BL;
+	std::shared_ptr<frc::VictorSP> BR;
+	std::shared_ptr<frc::VictorSP> FL;
+	std::shared_ptr<frc::VictorSP> FR;
+	std::shared_ptr<frc::VictorSP> climberOne;
+	std::shared_ptr<frc::VictorSP> climberTwo;
+	TwoMotorOutput climber;
 	std::shared_ptr<BuiltInAccelerometer> accel;
 	std::shared_ptr<frc::Encoder> encoder_left_front;
 	std::shared_ptr<frc::Encoder> encoder_right_front;
@@ -447,23 +453,25 @@ public:
 	std::string str;
 	EncoderOdometry odom;
 	DiffDriveController ctrl;
-	Servo servo;
+	Servo servo_left;
+	Servo servo_right;
 	//Counter c;
-	LidarLite ll;
+	//LidarLite ll;
 	Robot():
-			RosRobot("10.41.18.94"),
+			RosRobot("10.41.18.24:5802"),
 			stickLeft(new frc::Joystick(0)),
 			stickMiddle(new frc::Joystick(1)),
 			stickRight(new frc::Joystick(2)),
-			BL(new Talon(3)),
-			BR(new Talon(2)),
-			FL(new Talon(0)),
-			FR(new Talon(1)),
-			TestOne(new Victor(4)),
-			TestTwo(new Victor(5)),
+			BL(new VictorSP(0)),
+			BR(new VictorSP(2)),
+			FL(new VictorSP(1)),
+			FR(new VictorSP(3)),
+			climberOne(new VictorSP(4)),
+			climberTwo(new VictorSP(5)),
+			climber(climberOne, climberTwo),
 			accel(new BuiltInAccelerometer()),
-			encoder_left_front(new Encoder(7, 8)),
-			encoder_right_front(new Encoder(2, 5)),
+			encoder_left_front(new Encoder(1, 0)),
+			encoder_right_front(new Encoder(2, 3)),
 			gyro(new ADXRS450_Gyro()),
 			drive(*FL, *BL, *FR, *BR),
 			left_motors(BL, FL),
@@ -475,9 +483,10 @@ public:
 			right_controller(new PIDController(p, i, d, DRIVE_CONTROLLER_KF, encoder_right_front.get(), &right_motors)),
 			odom(getNodeHandle(), "/odom", encoder_left_front, encoder_right_front, WHEEL_SEPERATION_METERS),
 			ctrl(getNodeHandle(), "/cmd_vel", left_controller, right_controller, WHEEL_SEPERATION_METERS),
-			servo(6),
+			servo_left(7),
+			servo_right(6)
 			//c(7),
-			ll(frc::I2C::Port::kMXP, 0x62)
+			//ll(frc::I2C::Port::kMXP, 0x62)
 	{
 		encoder_left_front->SetDistancePerPulse(DISTANCE_PER_CYCLE_METERS);
 		encoder_left_front->SetPIDSourceType(PIDSourceType::kRate);
@@ -511,6 +520,7 @@ public:
 		//ll.configure(1);
 		AddUpdater(&odom);
 		AddEncoder("/encoder_left", encoder_left_front);
+		AddEncoder("/encoder_right", encoder_right_front);
 	}
 
 	void AutonomousInit() override
@@ -572,6 +582,9 @@ public:
 		double x = stickLeft->GetY();
 		double rotate = stickMiddle->GetX();
 		drive.ArcadeDrive(rotate, x);
+
+		if (stickRight->GetRawButton(1)) climber.PIDWrite(1.0);
+		else climber.PIDWrite(0);
 #endif
 	}
 	void DisabledInit() override
@@ -592,6 +605,7 @@ public:
 	}
 	void TestPeriodic() override
 	{
+		//test.Set(0.5);
 		/*
 		double speed = stickRight->GetY();
 		TestOne->Set(speed);
@@ -601,15 +615,21 @@ public:
 		//s << "Counter:" << c.Get() << std::endl;
 		//getNodeHandle().loginfo(s.str().c_str());
 		double servo_scale = stickRight->GetZ();
-		servo.Set(servo_scale);
+		servo_right.Set(servo_scale);
+
+		double servo_left_scale = stickMiddle->GetZ();
+		servo_left.Set(servo_left_scale);
+
+		printf("Encoder Left: %f\n", encoder_left_front->GetDistance());
+		printf("Encoder Right: %f\n", encoder_right_front->GetDistance());
 	}
 	void RobotPeriodic () override
 	{
-		std::stringstream s;
-		int ping = ll.GetDistance();
-		if (ping < 0) s << "Error reading lidar";
-		else s << "Lidar: " << ping;
-		getNodeHandle().loginfo(s.str().c_str());
+		//std::stringstream s;
+		//int ping = ll.GetDistance(false);
+		//if (ping < 0) s << "Error reading lidar";
+		//else s << "Lidar: " << ping;
+		//getNodeHandle().loginfo(s.str().c_str());
 	}
 };
 
