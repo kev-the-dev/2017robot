@@ -9,9 +9,11 @@
 #include <tf/transform_broadcaster.h>
 #include <tf/tf.h>
 
+// Other files in this project
 #include "EncoderOdometry.hpp"
 #include "DiffDriveController.hpp"
 #include "BaseServo.h"
+#include "TwoMotorOutput.hpp"
 
 // FRC Stuff
 #include <RobotDrive.h>
@@ -32,63 +34,6 @@
 
 #include <thread>
 #include <chrono>
-
-/*
-constexpr const char* OnboardResourceVISA = "ASRL1::INSTR";
-constexpr const char* MxpResourceVISA = "ASRL2::INSTR";
-
-constexpr const char* OnboardResourceOS = "/dev/ttyS0";
-constexpr const char* MxpResourceOS = "/dev/ttyS1";
-
- */
-
-/*
- * white = FL = 4
- * blACK = fr = 5
- * gray = bl = 6
- * PURPLE = br = 7
- *
- * DO0 = BL
- * DO2 = FR
- * DO1 = FL
- * DO3 = BR
- *
- */
-/* E4P encoders
- * 360 cycles per revoluton, 1440 pules including 4x
- *
- *
- *
- *
- */
-
-class TwoMotorOutput: public frc::PIDOutput
-{
-private:
-	std::shared_ptr<frc::SpeedController> m_one;
-	std::shared_ptr<frc::SpeedController> m_two;
-public:
-	TwoMotorOutput(std::shared_ptr<frc::SpeedController> one, std::shared_ptr<frc::SpeedController> two);
-	virtual ~TwoMotorOutput();
-	void PIDWrite(double output) override;
-	void Set(double output);
-};
-TwoMotorOutput::TwoMotorOutput(std::shared_ptr<frc::SpeedController> one, std::shared_ptr<frc::SpeedController> two):
-		m_one(one),
-		m_two(two)
-{
-
-}
-TwoMotorOutput::~TwoMotorOutput(){};
-void TwoMotorOutput::Set(double output)
-{
-	m_one->Set(output);
-	m_two->Set(output);
-}
-void TwoMotorOutput::PIDWrite(double output)
-{
-	Set(output);
-}
 
 #define KEVIN_LAPTOP_IP "10.41.18.94:5802"
 #define KANGAROO_IP     "10.41.18.24:5802"
@@ -209,7 +154,6 @@ public:
 		AddUpdater(&odom);
 		AddEncoder("/encoder_left", encoder_left_front);
 		AddEncoder("/encoder_right", encoder_right_front);
-		//getNodeHandle().advertise(cPub);
 	}
 	void MoveClawsOut(){
 		servo_left->SetAngle(0);
@@ -272,14 +216,17 @@ public:
 	void TestInit() override
 	{
 		getNodeHandle().loginfo("Test Begin");
-		//ctrl.Enable();
-		//geometry_msgs::Twist twist_msg;
-		//twist_msg.linear.x = 1.5;
-		//ctrl.Set(twist_msg);
-		FL->Set(0.5);
-		FR->Set(0.5);
-		BL->Set(0.5);
-		BR->Set(0.5);
+
+		/* Tunning velocity PID
+		 * 1) Drive robot at max effort, record velocity
+		 * 2) Set velocity as feed forward to left + right controller
+		 * 3) kD is multiple of current velocity error
+		 * 4) kP is multiple of integrated velocity error
+		 */
+		ctrl.Enable();
+		geometry_msgs::Twist twist_msg;
+		twist_msg.linear.x = 1.5;
+		ctrl.Set(twist_msg);
 
 	}
 	void TestPeriodic() override
