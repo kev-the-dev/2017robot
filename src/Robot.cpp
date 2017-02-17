@@ -11,6 +11,7 @@
 
 #include "EncoderOdometry.hpp"
 #include "DiffDriveController.hpp"
+#include "BaseServo.h"
 
 // FRC Stuff
 #include <RobotDrive.h>
@@ -94,6 +95,18 @@ void TwoMotorOutput::PIDWrite(double output)
 
 //#define USE_VEL_TELEOP
 
+/* CONTROLS:
+ * -------Joystick 1: (stick left)-------
+ * XY axes - drive forward/backward
+ * XY and hold trigger - drive slower forward/backward
+ * Button 4 - climb while held
+ * -------Joystick 2: (stick middle)-------
+ * XY axes - rotate
+ * XY and hold trigger - slow rotate
+ * Button 3 - push claws out and auto retract
+ */
+
+
 class Robot: public rosfrc::RosRobot {
 private:
 	const double WHEEL_RADIUS_METERS = 0.0762;
@@ -130,8 +143,8 @@ public:
 	std::string str;
 	EncoderOdometry odom;
 	DiffDriveController ctrl;
-	Servo servo_left;
-	Servo servo_right;
+	std::shared_ptr<BaseServo> servo_left;
+	std::shared_ptr<BaseServo> servo_right;
 	Robot():
 			RosRobot(KANGAROO_IP),
 			stickLeft(new frc::Joystick(0)),
@@ -146,7 +159,7 @@ public:
 			climber(climberOne, climberTwo),
 			accel(new BuiltInAccelerometer()),
 			encoder_left_front(new Encoder(7 ,8, false, frc::Encoder::k4X)),
-			encoder_right_front(new Encoder(5, 6,true, frc::Encoder::k4X)),
+			encoder_right_front(new Encoder(5, 6,false, frc::Encoder::k4X)),
 			//gyro(new ADXRS450_Gyro()),
 			drive(*FL, *BL, *FR, *BR),
 			left_motors(BL, FL),
@@ -158,8 +171,8 @@ public:
 			right_controller(new PIDController(p, i, d, DRIVE_CONTROLLER_KF, encoder_right_front.get(), &right_motors)),
 			odom(getNodeHandle(), "/odom", encoder_left_front, encoder_right_front, WHEEL_SEPERATION_METERS),
 			ctrl(getNodeHandle(), "/cmd_vel", left_controller, right_controller, WHEEL_SEPERATION_METERS),
-			servo_left(6),
-			servo_right(7)
+			servo_left(new ServoHS805BB(6)),
+			servo_right(new ServoHS805BB(7))
 	{
 		encoder_left_front->SetDistancePerPulse(DISTANCE_PER_CYCLE_METERS);
 		encoder_left_front->SetPIDSourceType(PIDSourceType::kRate);
@@ -191,18 +204,24 @@ public:
 		AddAccelerometer("/accel", accel);
 		AddGyro("/gyro", gyro);
 		*/
-		servo_left.SetSafetyEnabled(false);
-		servo_right.SetSafetyEnabled(false);
-		servo_left  .SetRawBounds(2410, 1488, 1488, 1488, 546);
-		servo_right .SetRawBounds(2000, 1505, 1500, 1495, 1000);
+		servo_left->SetSafetyEnabled(false);
+		servo_right->SetSafetyEnabled(false);
 		AddUpdater(&odom);
 		AddEncoder("/encoder_left", encoder_left_front);
 		AddEncoder("/encoder_right", encoder_right_front);
 		//getNodeHandle().advertise(cPub);
 	}
-
+	void MoveClawsOut(){
+		servo_left->SetAngle(0);
+		servo_right->SetAngle(95);
+	}
+	void MoveClawsIn(){
+		servo_left->SetAngle(95);
+		servo_right->SetAngle(0);
+	}
 	void AutonomousInit() override
 	{
+		odom.Reset();
 		getNodeHandle().loginfo("Auto Begin");
 	}
 	void AutonomousPeriodic() override
@@ -218,6 +237,7 @@ public:
 		ctrl.Disable();
 #endif
 		getNodeHandle().loginfo("Teleop Begin");
+		MoveClawsIn();
 	}
 	void TeleopPeriodic() override
 	{
@@ -227,28 +247,19 @@ public:
 		twist.angular.z = -stickMiddle->GetX()*MAX_ANGULAR_VELOCITY;
 		ctrl.Set(twist);
 #else
+		bool slow = stickLeft->GetRawButton(1);
+		int s = 1;
 		double x = stickLeft->GetY();
-		double rotate = stickMiddle->GetX();
-		drive.ArcadeDrive(rotate, x);
-
-		if (stickRight->GetRawButton(1)) climber.Set(stickRight->GetY());
-		else climber.Set(0);
-
-		//if (stickRight->GetRawButton(6))
-		//{
-		//	servo_left.SetRaw(1500);
-		//	//servo_right.SetRaw(1500);
-		//} else{
-		//	servo_left.SetRaw(1800);
-		//	//servo_right.SetRaw(1700);
-		//}
-
-		//servo_left.Set((stickMiddle->GetZ()+1.0)/2.0);
-		//servo_right.Set((stickRight->GetZ()+1.0)/2.0);
-
-
+		double rotation = stickMiddle->GetX();
+		if (slow) s = 2;
+		drive.ArcadeDrive(rotation/s, x/s);
 #endif
-	}
+		if (stickLeft->GetRawButton(4)) climber.Set(-1);
+		else if (stickLeft->GetRawButton(5)) climber.Set(-0.25);
+		else climber.Set(0);
+		if (stickMiddle->GetRawButton(3)) MoveClawsOut();
+		else MoveClawsIn();
+}
 	void DisabledInit() override
 	{
 		getNodeHandle().loginfo("Disabled");
@@ -261,7 +272,14 @@ public:
 	void TestInit() override
 	{
 		getNodeHandle().loginfo("Test Begin");
-		ctrl.Enable();
+		//ctrl.Enable();
+		//geometry_msgs::Twist twist_msg;
+		//twist_msg.linear.x = 1.5;
+		//ctrl.Set(twist_msg);
+		FL->Set(0.5);
+		FR->Set(0.5);
+		BL->Set(0.5);
+		BR->Set(0.5);
 
 	}
 	void TestPeriodic() override
