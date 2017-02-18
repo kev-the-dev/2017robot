@@ -50,3 +50,11 @@ void RobotMap::init(ros::NodeHandle& nh)
 	encoder_left.reset(new Encoder(7 ,8, false, frc::Encoder::k4X));
 	encoder_right.reset(new Encoder(5, 6,false, frc::Encoder::k4X));
 }
+void RobotMap::MoveClawsOut(){
+	servo_left->SetAngle(0);
+	servo_right->SetAngle(95);
+}
+void RobotMap::MoveClawsIn(){
+	servo_left->SetAngle(95);
+	servo_right->SetAngle(0);
+}

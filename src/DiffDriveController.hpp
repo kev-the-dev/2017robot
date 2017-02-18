@@ -18,6 +18,7 @@ private:
 public:
 	DiffDriveController(ros::NodeHandle& nh, char* topic, std::shared_ptr<frc::PIDController> left, std::shared_ptr<frc::PIDController> right, double speration);
 	void Set(const geometry_msgs::Twist& t);
+	void Set(double linear, double angular);
 	void Disable();
 	void Enable();
 	bool getEnabled();

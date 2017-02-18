@@ -29,5 +29,6 @@ public:
 	virtual void update();
 	void Reset();
 	void Reset(double x_i, double y_i, double th_i);
+	nav_msgs::Odometry Get();
 	virtual ~EncoderOdometry(){};
 };

@@ -104,3 +104,7 @@ void EncoderOdometry::Reset(double x_i, double y_i, double th_i)
 	timer.Reset();
 	//timer.Start();
 }
+nav_msgs::Odometry EncoderOdometry::Get()
+{
+	return odom_msg;
+}

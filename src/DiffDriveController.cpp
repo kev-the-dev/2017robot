@@ -13,9 +13,11 @@ DiffDriveController::DiffDriveController(ros::NodeHandle& nh, char* topic, std::
 }
 void DiffDriveController::Set(const geometry_msgs::Twist& t)
 {
+	Set(t.linear.x, t.angular.z);
+}
+void DiffDriveController::Set(double linear, double angular)
+{
 	if (!m_enabled) return;
-	double linear = t.linear.x;
-	double angular = t.angular.z;
 	double left = linear - (angular * m_separation / 2.0);
 	double right = linear + (angular * m_separation / 2.0);
 	m_left->SetSetpoint(left);

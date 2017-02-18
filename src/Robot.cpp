@@ -15,8 +15,9 @@
 #include "DiffDriveController.hpp"
 #include "BaseServo.h"
 #include "TwoMotorOutput.hpp"
-#include "DoNothing.h"
-#include "DriveForwardAuto.h"
+#include "Commands/DoNothing.h"
+#include "Commands/DriveForwardAuto.h"
+#include "Commands/CenterGear.h"
 
 // FRC Stuff
 #include <RobotDrive.h>
@@ -63,39 +64,36 @@ public:
 	Robot():
 			RosRobot(KANGAROO_IP)
 	{
+		RobotMap::init(getNodeHandle());
 		AddUpdater(odom.get());
 		AddEncoder("/encoder_left", encoder_left);
 		AddEncoder("/encoder_right", encoder_right);
 
 		auto_chooser.AddDefault("Do Nothing",std::shared_ptr<Command>(new DoNothing()));
 		auto_chooser.AddObject ("Move Forward", std::shared_ptr<Command>(new DriveForwardAuto()));
-	}
-	void MoveClawsOut(){
-		servo_left->SetAngle(0);
-		servo_right->SetAngle(95);
-	}
-	void MoveClawsIn(){
-		servo_left->SetAngle(95);
-		servo_right->SetAngle(0);
+		auto_chooser.AddObject ("Center Gear", std::shared_ptr<Command>(new CenterGear()));
 	}
 	void AutonomousInit() override
 	{
 		odom->Reset();
+		MoveClawsIn();
 		getNodeHandle().loginfo("Auto Begin");
+		std::shared_ptr<Command> autoCommand = auto_chooser.GetSelected();
+		autoCommand->Start();
 	}
 	void AutonomousPeriodic() override
 	{
-
+		Scheduler::GetInstance()->Run();
 	}
 
 	void TeleopInit() override
 	{
+		getNodeHandle().loginfo("Teleop Begin");
 #ifdef USE_VEL_TELEOP
 		drive_ctrl->Enable();
 #else
 		drive_ctrl->Disable();
 #endif
-		getNodeHandle().loginfo("Teleop Begin");
 		MoveClawsIn();
 	}
 	void TeleopPeriodic() override
@@ -121,6 +119,7 @@ public:
 }
 	void DisabledInit() override
 	{
+		drive_ctrl->Disable();
 		getNodeHandle().loginfo("Disabled");
 
 	}

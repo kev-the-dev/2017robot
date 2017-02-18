@@ -55,5 +55,8 @@ public:
 	static std::shared_ptr<BaseServo> servo_left;
 	static std::shared_ptr<BaseServo> servo_right;
 
+	void MoveClawsOut();
+	void MoveClawsIn();
+
 };
 

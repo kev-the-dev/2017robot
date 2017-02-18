@@ -1,6 +1,7 @@
-#include <Commands/Command.h>
+#include "CommandBase.h"
 
-class DriveForwardAuto : public frc::Command {
+class DriveForwardAuto : public CommandBase {
+private:
 public:
 	DriveForwardAuto();
 	virtual ~DriveForwardAuto(){}
