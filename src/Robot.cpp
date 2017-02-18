@@ -6,6 +6,7 @@
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/TransformStamped.h>
+#include <geometry_msgs/Pose2D.h>
 #include <tf/transform_broadcaster.h>
 #include <tf/tf.h>
 
@@ -14,6 +15,8 @@
 #include "DiffDriveController.hpp"
 #include "BaseServo.h"
 #include "TwoMotorOutput.hpp"
+#include "DoNothing.h"
+#include "DriveForwardAuto.h"
 
 // FRC Stuff
 #include <RobotDrive.h>
@@ -31,6 +34,8 @@
 #include <memory>
 #include <cmath>
 #include <DigitalInput.h>
+#include <SmartDashboard/SendableChooser.h>
+#include "RobotMap.h"
 
 #include <thread>
 #include <chrono>
@@ -52,108 +57,18 @@
  */
 
 
-class Robot: public rosfrc::RosRobot {
-private:
-	const double WHEEL_RADIUS_METERS = 0.0762;
-	const double CYCLES_PER_REVOLUTION = 360.0;
-	const double WHEEL_SEPERATION_METERS = 0.6096;
-	const double ENCODER_REVOLUTIONS_PER_OUTPUT_REVOLUTION = 11.25;
-	const double MAX_LINEAR_VELOCITY_METERS_PER_SECOND = 5.4;
-	const double MAX_ANGULAR_VELOCITY = 6.0;
-
-	const double WHEEL_CIRCUMFERENCE_METERS = 2.0 * PI * WHEEL_RADIUS_METERS;
-	const double DISTANCE_PER_CYCLE_METERS = (WHEEL_CIRCUMFERENCE_METERS / CYCLES_PER_REVOLUTION) / ENCODER_REVOLUTIONS_PER_OUTPUT_REVOLUTION;
-	const double DRIVE_CONTROLLER_KF = 1.0 / MAX_LINEAR_VELOCITY_METERS_PER_SECOND;
+class Robot: public rosfrc::RosRobot, RobotMap {
 public:
-	std::shared_ptr<frc::Joystick> stickLeft;
-	std::shared_ptr<frc::Joystick> stickMiddle;
-	std::shared_ptr<frc::Joystick> stickRight;
-	std::shared_ptr<frc::VictorSP> BL;
-	std::shared_ptr<frc::VictorSP> BR;
-	std::shared_ptr<frc::VictorSP> FL;
-	std::shared_ptr<frc::VictorSP> FR;
-	std::shared_ptr<frc::VictorSP> climberOne;
-	std::shared_ptr<frc::VictorSP> climberTwo;
-	TwoMotorOutput climber;
-	std::shared_ptr<BuiltInAccelerometer> accel;
-	std::shared_ptr<frc::Encoder> encoder_left_front;
-	std::shared_ptr<frc::Encoder> encoder_right_front;
-	//std::shared_ptr<frc::Gyro> gyro;
-	frc::RobotDrive drive;
-	TwoMotorOutput left_motors;
-	TwoMotorOutput right_motors;
-	float p, i ,d;
-	std::shared_ptr<frc::PIDController> left_controller;
-	std::shared_ptr<frc::PIDController> right_controller;
-	std::string str;
-	EncoderOdometry odom;
-	DiffDriveController ctrl;
-	std::shared_ptr<BaseServo> servo_left;
-	std::shared_ptr<BaseServo> servo_right;
+	SendableChooser<std::shared_ptr<Command>> auto_chooser;
 	Robot():
-			RosRobot(KANGAROO_IP),
-			stickLeft(new frc::Joystick(0)),
-			stickMiddle(new frc::Joystick(1)),
-			stickRight(new frc::Joystick(2)),
-			BL(new VictorSP(0)),
-			BR(new VictorSP(2)),
-			FL(new VictorSP(1)),
-			FR(new VictorSP(3)),
-			climberOne(new VictorSP(4)),
-			climberTwo(new VictorSP(5)),
-			climber(climberOne, climberTwo),
-			accel(new BuiltInAccelerometer()),
-			encoder_left_front(new Encoder(7 ,8, false, frc::Encoder::k4X)),
-			encoder_right_front(new Encoder(5, 6,false, frc::Encoder::k4X)),
-			//gyro(new ADXRS450_Gyro()),
-			drive(*FL, *BL, *FR, *BR),
-			left_motors(BL, FL),
-			right_motors(BR, FR),
-			p(0.1),
-			i(0.0),
-			d(0.325),
-			left_controller(new PIDController(p, i, d, DRIVE_CONTROLLER_KF, encoder_left_front.get(), &left_motors)),
-			right_controller(new PIDController(p, i, d, DRIVE_CONTROLLER_KF, encoder_right_front.get(), &right_motors)),
-			odom(getNodeHandle(), "/odom", encoder_left_front, encoder_right_front, WHEEL_SEPERATION_METERS),
-			ctrl(getNodeHandle(), "/cmd_vel", left_controller, right_controller, WHEEL_SEPERATION_METERS),
-			servo_left(new ServoHS805BB(6)),
-			servo_right(new ServoHS805BB(7))
+			RosRobot(KANGAROO_IP)
 	{
-		encoder_left_front->SetDistancePerPulse(DISTANCE_PER_CYCLE_METERS);
-		encoder_left_front->SetPIDSourceType(PIDSourceType::kRate);
-		encoder_left_front->SetReverseDirection(true);
-		encoder_right_front->SetDistancePerPulse(DISTANCE_PER_CYCLE_METERS);
-		encoder_right_front->SetPIDSourceType(PIDSourceType::kRate);
-		left_controller->SetInputRange(-MAX_LINEAR_VELOCITY_METERS_PER_SECOND, MAX_LINEAR_VELOCITY_METERS_PER_SECOND);
-		right_controller->SetInputRange(-MAX_LINEAR_VELOCITY_METERS_PER_SECOND, MAX_LINEAR_VELOCITY_METERS_PER_SECOND);
-		BL->SetSafetyEnabled(false);
-		BR->SetSafetyEnabled(false);
-		FL->SetSafetyEnabled(false);
-		FR->SetSafetyEnabled(false);
-		drive.SetSafetyEnabled(false);
-		FR->SetInverted(true);
-		BR->SetInverted(true);
+		AddUpdater(odom.get());
+		AddEncoder("/encoder_left", encoder_left);
+		AddEncoder("/encoder_right", encoder_right);
 
-		/*
-		AddJoystick("/joysticks/left", stickLeft);
-		AddJoystick("/joysticks/middle", stickMiddle);
-		AddSpeedController("/speed_controllers/FL", FL);
-		AddSpeedController("/speed_controllers/FR", FR);
-		AddSpeedController("/speed_controllers/BL", BL);
-		AddSpeedController("/speed_controllers/BR", BR);
-		AddSpeedController("/speed_controllers/TestOne", TestOne);
-		AddSpeedController("/speed_controllers/TestTwo", TestTwo);
-		AddEncoder("/encoder_right", encoder_right_front);
-		AddPIDController("/left_wheels_vel", left_controller);
-		AddPIDController("/right_wheels_vel", right_controller)
-		AddAccelerometer("/accel", accel);
-		AddGyro("/gyro", gyro);
-		*/
-		servo_left->SetSafetyEnabled(false);
-		servo_right->SetSafetyEnabled(false);
-		AddUpdater(&odom);
-		AddEncoder("/encoder_left", encoder_left_front);
-		AddEncoder("/encoder_right", encoder_right_front);
+		auto_chooser.AddDefault("Do Nothing",std::shared_ptr<Command>(new DoNothing()));
+		auto_chooser.AddObject ("Move Forward", std::shared_ptr<Command>(new DriveForwardAuto()));
 	}
 	void MoveClawsOut(){
 		servo_left->SetAngle(0);
@@ -165,7 +80,7 @@ public:
 	}
 	void AutonomousInit() override
 	{
-		odom.Reset();
+		odom->Reset();
 		getNodeHandle().loginfo("Auto Begin");
 	}
 	void AutonomousPeriodic() override
@@ -176,9 +91,9 @@ public:
 	void TeleopInit() override
 	{
 #ifdef USE_VEL_TELEOP
-		ctrl.Enable();
+		drive_ctrl->Enable();
 #else
-		ctrl.Disable();
+		drive_ctrl->Disable();
 #endif
 		getNodeHandle().loginfo("Teleop Begin");
 		MoveClawsIn();
@@ -196,11 +111,11 @@ public:
 		double x = stickLeft->GetY();
 		double rotation = stickMiddle->GetX();
 		if (slow) s = 2;
-		drive.ArcadeDrive(rotation/s, x/s);
+		drive->ArcadeDrive(rotation/s, x/s);
 #endif
-		if (stickLeft->GetRawButton(4)) climber.Set(-1);
-		else if (stickLeft->GetRawButton(5)) climber.Set(-0.25);
-		else climber.Set(0);
+		if (stickLeft->GetRawButton(4)) climber->Set(-1);
+		else if (stickLeft->GetRawButton(5)) climber->Set(-0.25);
+		else climber->Set(0);
 		if (stickMiddle->GetRawButton(3)) MoveClawsOut();
 		else MoveClawsIn();
 }
@@ -223,10 +138,10 @@ public:
 		 * 3) kD is multiple of current velocity error
 		 * 4) kP is multiple of integrated velocity error
 		 */
-		ctrl.Enable();
+		drive_ctrl->Enable();
 		geometry_msgs::Twist twist_msg;
 		twist_msg.linear.x = 1.5;
-		ctrl.Set(twist_msg);
+		drive_ctrl->Set(twist_msg);
 
 	}
 	void TestPeriodic() override
