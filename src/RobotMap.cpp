@@ -27,6 +27,12 @@ void RobotMap::init(ros::NodeHandle& nh)
 	stickMiddle.reset(new frc::Joystick(1));
 	stickRight.reset(new frc::Joystick(2));
 
+	encoder_left.reset(new Encoder(7 ,8, false, frc::Encoder::k4X));
+	encoder_right.reset(new Encoder(5, 6,false, frc::Encoder::k4X));
+	encoder_left->SetDistancePerPulse(DISTANCE_PER_CYCLE_METERS);
+	encoder_right->SetDistancePerPulse(DISTANCE_PER_CYCLE_METERS);
+	encoder_left->SetPIDSourceType(PIDSourceType::kRate);
+	encoder_right->SetPIDSourceType(PIDSourceType::kRate);
 	auto BL = shared_ptr<frc::SpeedController>(new frc::VictorSP(0));
 	auto BR = shared_ptr<frc::SpeedController>(new frc::VictorSP(2));
 	auto FL = shared_ptr<frc::SpeedController>(new frc::VictorSP(1));
@@ -36,8 +42,11 @@ void RobotMap::init(ros::NodeHandle& nh)
 	drive_left.reset(new TwoMotorOutput(BL, FL));
 	drive_right.reset(new TwoMotorOutput(BR, FR));
 	drive.reset(new RobotDrive(*FL, *BL, *FR, *BR));
+	drive->SetExpiration(3);
 	left_controller.reset(new PIDController(P, I, D, DRIVE_CONTROLLER_KF, encoder_left.get(), drive_left.get()));
 	right_controller.reset(new PIDController(P, I, D, DRIVE_CONTROLLER_KF, encoder_right.get(), drive_right.get()));
+	left_controller->SetPIDSourceType(PIDSourceType::kRate);
+	right_controller->SetPIDSourceType(PIDSourceType::kRate);
 	odom.reset(new EncoderOdometry(nh, "/odom", encoder_left, encoder_right, WHEEL_SEPERATION_METERS));
 	drive_ctrl.reset(new DiffDriveController(nh, "/cmd_vel", left_controller, right_controller, WHEEL_SEPERATION_METERS));
 
@@ -47,14 +56,12 @@ void RobotMap::init(ros::NodeHandle& nh)
 
 	servo_left.reset(new ServoHS805BB(6));
 	servo_right.reset(new ServoHS805BB(7));
-	encoder_left.reset(new Encoder(7 ,8, false, frc::Encoder::k4X));
-	encoder_right.reset(new Encoder(5, 6,false, frc::Encoder::k4X));
 }
 void RobotMap::MoveClawsOut(){
-	servo_left->SetAngle(0);
+	servo_left->SetAngle(95);
 	servo_right->SetAngle(95);
 }
 void RobotMap::MoveClawsIn(){
-	servo_left->SetAngle(95);
+	servo_left->SetAngle(195);
 	servo_right->SetAngle(0);
 }

@@ -7,11 +7,12 @@ CenterGear::CenterGear()
 void CenterGear::Initialize()
 {
 	drive_ctrl->Enable();
-	drive_ctrl->Set(1.5, 0);
 }
 void CenterGear::Execute()
 {
-
+	double error = (DISTANCE_METERS-odom->Get().pose.pose.position.x)/DISTANCE_METERS;
+	if (KP_IN_METERS_PER_SECOND*error <= MINIMUM_VELOCITY) drive_ctrl->Set(MINIMUM_VELOCITY, 0);
+	else drive_ctrl->Set(KP_IN_METERS_PER_SECOND*error, 0);
 }
 bool CenterGear::IsFinished()
 {

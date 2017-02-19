@@ -72,6 +72,7 @@ public:
 		auto_chooser.AddDefault("Do Nothing",std::shared_ptr<Command>(new DoNothing()));
 		auto_chooser.AddObject ("Move Forward", std::shared_ptr<Command>(new DriveForwardAuto()));
 		auto_chooser.AddObject ("Center Gear", std::shared_ptr<Command>(new CenterGear()));
+		SmartDashboard::PutData("Auto Program", &auto_chooser);
 	}
 	void AutonomousInit() override
 	{
