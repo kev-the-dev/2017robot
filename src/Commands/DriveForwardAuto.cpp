@@ -11,8 +11,7 @@ void DriveForwardAuto::Initialize()
 }
 void DriveForwardAuto::Execute()
 {
-	drive->Drive(EFFORT,0);
-
+	drive->ArcadeDrive(0, -EFFORT);
 }
 bool DriveForwardAuto::IsFinished()
 {

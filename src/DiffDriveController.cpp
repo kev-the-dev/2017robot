@@ -1,5 +1,6 @@
 #include "DiffDriveController.hpp"
 
+#ifdef USE_ROS
 DiffDriveController::DiffDriveController(ros::NodeHandle& nh, char* topic, std::shared_ptr<frc::PIDController> left, std::shared_ptr<frc::PIDController> right, double separation):
 		m_left(left),
 		m_right(right),
@@ -11,6 +12,16 @@ DiffDriveController::DiffDriveController(ros::NodeHandle& nh, char* topic, std::
 {
 	nh.subscribe(m_sub);
 }
+#else
+DiffDriveController::DiffDriveController(char* topic, std::shared_ptr<frc::PIDController> left, std::shared_ptr<frc::PIDController> right, double separation):
+		m_left(left),
+		m_right(right),
+		m_separation(separation),
+		m_enabled(false)
+{
+
+}
+#endif
 void DiffDriveController::Set(const geometry_msgs::Twist& t)
 {
 	Set(t.linear.x, t.angular.z);

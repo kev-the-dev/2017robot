@@ -13,6 +13,6 @@ public:
 	void End() override;
 	void Interrupted() override;
 	Timer timer;
-	const double TIME = 3;
+	const double TIME = 5;
 	const double EFFORT = 0.5;
 };

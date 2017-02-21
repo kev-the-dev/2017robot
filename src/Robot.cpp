@@ -37,12 +37,15 @@
 #include <DigitalInput.h>
 #include <SmartDashboard/SendableChooser.h>
 #include "RobotMap.h"
+#include "UseRos.h"
 
 #include <thread>
 #include <chrono>
 
+#ifdef USE_ROS
 #define KEVIN_LAPTOP_IP "10.41.18.94:5802"
 #define KANGAROO_IP     "10.41.18.24:5802"
+#endif
 
 //#define USE_VEL_TELEOP
 
@@ -58,27 +61,46 @@
  */
 
 
+#ifdef USE_ROS
 class Robot: public rosfrc::RosRobot, RobotMap {
+#else
+	class Robot: public frc::IterativeRobot, RobotMap {
+#endif
 public:
 	SendableChooser<std::shared_ptr<Command>> auto_chooser;
-	Robot():
-			RosRobot(KANGAROO_IP)
+	Robot()
+#ifdef USE_ROS
+		:
+			RosRobot(KEVIN_LAPTOP_IP)
+#else
+
+#endif
 	{
+#ifdef USE_ROS
 		RobotMap::init(getNodeHandle());
 		AddUpdater(odom.get());
 		AddEncoder("/encoder_left", encoder_left);
 		AddEncoder("/encoder_right", encoder_right);
+#else
+		RobotMap::init();
+#endif
 
 		auto_chooser.AddDefault("Do Nothing",std::shared_ptr<Command>(new DoNothing()));
 		auto_chooser.AddObject ("Move Forward", std::shared_ptr<Command>(new DriveForwardAuto()));
-		auto_chooser.AddObject ("Center Gear", std::shared_ptr<Command>(new CenterGear()));
+		auto_chooser.AddObject ("Center Gear", std::shared_ptr<Command>(new CenterGear(0)));
+		auto_chooser.AddObject ("Center Gear Left", std::shared_ptr<Command>(new CenterGear(-1)));
+		auto_chooser.AddObject ("Center Gear Right", std::shared_ptr<Command>(new CenterGear(1)));
 		SmartDashboard::PutData("Auto Program", &auto_chooser);
 	}
 	void AutonomousInit() override
 	{
+#ifdef USE_ROS
+		getNodeHandle().loginfo("Auto Begin");
+#endif
+		encoder_left->Reset();
+		encoder_right->Reset();
 		odom->Reset();
 		MoveClawsIn();
-		getNodeHandle().loginfo("Auto Begin");
 		std::shared_ptr<Command> autoCommand = auto_chooser.GetSelected();
 		autoCommand->Start();
 	}
@@ -89,7 +111,9 @@ public:
 
 	void TeleopInit() override
 	{
+#ifdef USE_ROS
 		getNodeHandle().loginfo("Teleop Begin");
+#endif
 #ifdef USE_VEL_TELEOP
 		drive_ctrl->Enable();
 #else
@@ -120,8 +144,10 @@ public:
 }
 	void DisabledInit() override
 	{
-		drive_ctrl->Disable();
+#ifdef USE_ROS
 		getNodeHandle().loginfo("Disabled");
+#endif
+		drive_ctrl->Disable();
 
 	}
 	void DisabledPeriodic() override
@@ -130,7 +156,9 @@ public:
 	}
 	void TestInit() override
 	{
+#ifdef USE_ROS
 		getNodeHandle().loginfo("Test Begin");
+#endif
 
 		/* Tunning velocity PID
 		 * 1) Drive robot at max effort, record velocity
@@ -150,7 +178,13 @@ public:
 	}
 	void RobotPeriodic () override
 	{
+#ifdef USE_ROS
 
+#else
+		odom->update();
+		printf("Encoder Left = %f\n", encoder_left->GetDistance());
+		printf("Encoder Right = %f\n\n", encoder_right->GetDistance());
+#endif
 	}
 };
 

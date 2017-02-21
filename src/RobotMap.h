@@ -14,10 +14,11 @@
 #include "EncoderOdometry.hpp"
 #include "DiffDriveController.hpp"
 #include "TwoMotorOutput.hpp"
+#include "UseRos.h"
 
 class RobotMap {
 public:
-	static constexpr double WHEEL_RADIUS_METERS = 0.0762;
+	static constexpr double WHEEL_RADIUS_METERS = 0.077851;
 	static constexpr double CYCLES_PER_REVOLUTION = 360.0;
 	static constexpr double WHEEL_SEPERATION_METERS = 0.6096;
 	static constexpr double ENCODER_REVOLUTIONS_PER_OUTPUT_REVOLUTION = 11.25;
@@ -28,7 +29,11 @@ public:
 	static constexpr double DISTANCE_PER_CYCLE_METERS = (WHEEL_CIRCUMFERENCE_METERS / CYCLES_PER_REVOLUTION) / ENCODER_REVOLUTIONS_PER_OUTPUT_REVOLUTION;
 	static constexpr double DRIVE_CONTROLLER_KF = 1.0 / MAX_LINEAR_VELOCITY_METERS_PER_SECOND;
 
+#ifdef USE_ROS
 	static void init(ros::NodeHandle &nh);
+#else
+	static void init();
+#endif
 
 	// HID
 	static std::shared_ptr<frc::Joystick> stickLeft;

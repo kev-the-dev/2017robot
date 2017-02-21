@@ -1,4 +1,5 @@
 #include "EncoderOdometry.hpp"
+#ifdef USE_ROS
 EncoderOdometry::EncoderOdometry(ros::NodeHandle& nh, const char* topic, std::shared_ptr<frc::Encoder> left_encoder, std::shared_ptr<frc::Encoder> right_encoder, double wheel_sep):
 		m_left(left_encoder),
 		m_right(right_encoder),
@@ -8,6 +9,15 @@ EncoderOdometry::EncoderOdometry(ros::NodeHandle& nh, const char* topic, std::sh
 		m_nh(nh),
 		x(0.0), y(0.0), th(0.0),
 		last_left(0.0), last_right(0.0)
+#else
+EncoderOdometry::EncoderOdometry(const char* topic, std::shared_ptr<frc::Encoder> left_encoder, std::shared_ptr<frc::Encoder> right_encoder, double wheel_sep):
+		m_left(left_encoder),
+		m_right(right_encoder),
+		first_update(true),
+		wheel_seperation(wheel_sep),
+		x(0.0), y(0.0), th(0.0),
+		last_left(0.0), last_right(0.0)
+#endif
 {
 	odom_msg.header.frame_id = "odom";
 	odom_msg.child_frame_id = "base_link";
@@ -35,8 +45,10 @@ EncoderOdometry::EncoderOdometry(ros::NodeHandle& nh, const char* topic, std::sh
 	odom_transform.header.frame_id = "odom";
 	odom_transform.child_frame_id = "base_link";
 
+#ifdef USE_ROS
 	tf_broadcaster.init(nh);
 	nh.advertise(odom_pub);
+#endif
 }
 void EncoderOdometry::update()
 {
@@ -72,7 +84,6 @@ void EncoderOdometry::update()
 	y += delta_y;
 	th += delta_th;
 
-	odom_msg.header.stamp = m_nh.now();
 	odom_msg.pose.pose.position.x = x;
 	odom_msg.pose.pose.position.y = y;
 	odom_msg.pose.pose.orientation = tf::createQuaternionFromYaw(th);
@@ -85,8 +96,11 @@ void EncoderOdometry::update()
 	odom_transform.transform.translation.y = odom_msg.pose.pose.position.y;
 	odom_transform.transform.rotation = odom_msg.pose.pose.orientation;
 
+#ifdef USE_ROS
+	odom_msg.header.stamp = m_nh.now();
 	odom_pub.publish(&odom_msg);
 	tf_broadcaster.sendTransform(odom_transform);
+#endif
 }
 void EncoderOdometry::Reset()
 {
