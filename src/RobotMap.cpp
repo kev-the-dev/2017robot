@@ -77,9 +77,11 @@ void RobotMap::SetWrenchEffort()
 {
 	drive_ctrl->Disable();
 	drive->SetSafetyEnabled(true);
+	drive->Drive(0.0, 0.0);
 }
 void RobotMap::SetWrenchVelocity()
 {
 	drive->SetSafetyEnabled(false);
 	drive_ctrl->Enable();
+	drive_ctrl->Set(0.0, 0.0);
 }
