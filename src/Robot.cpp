@@ -19,6 +19,7 @@
 #include "Commands/DriveForwardAuto.h"
 #include "Commands/CenterGear.h"
 #include "Commands/EncoderAuto.h"
+#include "Commands/SideGearAuto.h"
 
 // FRC Stuff
 #include <RobotDrive.h>
@@ -91,12 +92,14 @@ public:
 
 		auto_chooser.AddDefault("Do Nothing",std::shared_ptr<Command>(new DoNothing()));
 		auto_chooser.AddObject ("Move Forward", std::shared_ptr<Command>(new DriveForwardAuto()));
-		auto_chooser.AddObject ("Center Gear", std::shared_ptr<Command>(new CenterGear(0)));
-		auto_chooser.AddObject ("Center Gear Left", std::shared_ptr<Command>(new CenterGear(-1)));
-		auto_chooser.AddObject ("Center Gear Right", std::shared_ptr<Command>(new CenterGear(1)));
-		auto_chooser.AddObject ("Encoder", std::shared_ptr<Command>(new EncoderAuto(0)));
-		auto_chooser.AddObject ("Encoder Left", std::shared_ptr<Command>(new EncoderAuto(-1)));
-		auto_chooser.AddObject ("Encoder Right", std::shared_ptr<Command>(new EncoderAuto(1)));
+//		auto_chooser.AddObject ("Center Gear", std::shared_ptr<Command>(new CenterGear(0)));
+//		auto_chooser.AddObject ("Center Gear Left", std::shared_ptr<Command>(new CenterGear(-1)));
+//		auto_chooser.AddObject ("Center Gear Right", std::shared_ptr<Command>(new CenterGear(1)));
+		auto_chooser.AddObject ("Center Gear", std::shared_ptr<Command>(new EncoderAuto(0)));
+		auto_chooser.AddObject ("Center Gear Left", std::shared_ptr<Command>(new EncoderAuto(-1)));
+		auto_chooser.AddObject ("Center Gear Right", std::shared_ptr<Command>(new EncoderAuto(1)));
+		auto_chooser.AddObject ("Side Gear Left", std::shared_ptr<Command>(new SideGearAuto(false)));
+		auto_chooser.AddObject ("Side Gear Right", std::shared_ptr<Command>(new SideGearAuto(true)));
 		SmartDashboard::PutData("Auto Program", &auto_chooser);
 
 		SmartDashboard::PutNumber("P", RobotMap::P);
