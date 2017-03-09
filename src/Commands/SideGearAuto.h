@@ -11,7 +11,7 @@
 class SideGearAuto : public CommandGroup {
 private:
 	static constexpr double FORWARD_METERS   = 1.81356;
-	static constexpr double ROTATE_DEGREES   = 120.0;
+	static constexpr double ROTATE_DEGREES   = 60.0;
 	static constexpr double FORWARD_METERS_2 = 1.778;
 	static constexpr double PAUSE_SECONDS    = 3.0;
 	static constexpr double BACKUP_METERS    = -1.0;

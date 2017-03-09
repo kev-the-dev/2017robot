@@ -102,8 +102,8 @@ public:
 		auto_chooser.AddObject ("Side Gear Right", std::shared_ptr<Command>(new SideGearAuto(true)));
 		SmartDashboard::PutData("Auto Program", &auto_chooser);
 
-		SmartDashboard::PutNumber("P", RobotMap::P);
-		SmartDashboard::PutNumber("D", RobotMap::D);
+		//SmartDashboard::PutNumber("P", RobotMap::P);
+		//SmartDashboard::PutNumber("D", RobotMap::D);
 		max_vel = 0.0;
 	}
 	void RobotInit() override
@@ -185,24 +185,6 @@ public:
 #ifdef USE_ROS
 		getNodeHandle().loginfo("Test Begin");
 #endif
-
-		RobotMap::P = SmartDashboard::GetNumber("P", RobotMap::P);
-		RobotMap::D = SmartDashboard::GetNumber("D", RobotMap::D);
-		left_controller->SetPID(RobotMap::P, RobotMap::I, RobotMap::D);
-		right_controller->SetPID(RobotMap::P, RobotMap::I, RobotMap::D);
-		printf("P = %f, D= %f\n", P, D);
-		/* Tunning velocity PID
-		 * 1) Drive robot at max effort, record velocity
-		 * 2) Set velocity as feed forward to left + right controller
-		 * 3) kD is multiple of current velocity error
-		 * 4) kP is multiple of integrated velocity error
-		 */
-		SetWrenchVelocity();
-		geometry_msgs::Twist twist_msg;
-		//twist_msg.linear.x = 1.5;
-		twist_msg.angular.z = 3.141592654;
-		drive_ctrl->Set(twist_msg);
-
 	}
 	void TestPeriodic() override
 	{
@@ -216,6 +198,7 @@ public:
 
 #else
 		odom->update();
+		/*
 		SmartDashboard::PutNumber("Odom Theta", odom->GetThetaDeg());
 		SmartDashboard::PutNumber("Odom X", odom->GetX());
 		SmartDashboard::PutNumber("Odom Y", odom->GetY());
@@ -228,6 +211,7 @@ public:
 		SmartDashboard::PutNumber("Max", max_vel);
 		//printf("Encoder Left = %f\n", encoder_left->GetDistance());
 		//printf("Encoder Right = %f\n\n", encoder_right->GetDistance());
+		 */
 #endif
 	}
 };
