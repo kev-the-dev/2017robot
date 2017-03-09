@@ -8,6 +8,7 @@ void DriveForwardAuto::Initialize()
 {
 	timer.Reset();
 	timer.Start();
+	SetWrenchEffort();
 }
 void DriveForwardAuto::Execute()
 {

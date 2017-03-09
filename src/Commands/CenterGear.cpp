@@ -8,8 +8,7 @@ void CenterGear::Initialize()
 {
 	timer.Reset();
 	timer.Start();
-	drive->SetSafetyEnabled(false);
-	//drive_ctrl->Enable();
+	SetWrenchEffort();
 }
 void CenterGear::Execute()
 {

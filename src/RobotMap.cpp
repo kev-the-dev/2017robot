@@ -11,9 +11,9 @@ shared_ptr<frc::PIDController> RobotMap::left_controller = NULL;
 shared_ptr<frc::PIDController> RobotMap::right_controller = NULL;
 shared_ptr<DiffDriveController> RobotMap::drive_ctrl = NULL;
 shared_ptr<EncoderOdometry> RobotMap::odom = NULL;
-double RobotMap::P = 0.1;
+double RobotMap::P = 0.0;
 double RobotMap::I = 0.0;
-double RobotMap::D = 0.325;
+double RobotMap::D = 0.3;
 shared_ptr<BaseServo> RobotMap::servo_left = NULL;
 shared_ptr<BaseServo> RobotMap::servo_right = NULL;
 std::shared_ptr<frc::Encoder> RobotMap::encoder_left = NULL;
@@ -31,8 +31,8 @@ void RobotMap::init()
 	stickMiddle.reset(new frc::Joystick(1));
 	stickRight.reset(new frc::Joystick(2));
 
-	encoder_left.reset(new Encoder(7 ,8, true, frc::Encoder::k1X));
-	encoder_right.reset(new Encoder(6, 5,true, frc::Encoder::k1X));
+	encoder_left.reset(new Encoder(7 ,8, true, frc::Encoder::k4X));
+	encoder_right.reset(new Encoder(6, 5,true, frc::Encoder::k4X));
 	encoder_left->SetDistancePerPulse(DISTANCE_PER_CYCLE_METERS);
 	encoder_right->SetDistancePerPulse(DISTANCE_PER_CYCLE_METERS);
 	encoder_left->SetPIDSourceType(PIDSourceType::kRate);
@@ -41,11 +41,10 @@ void RobotMap::init()
 	auto BR = shared_ptr<frc::SpeedController>(new frc::VictorSP(2));
 	auto FL = shared_ptr<frc::SpeedController>(new frc::VictorSP(1));
 	auto FR = shared_ptr<frc::SpeedController>(new frc::VictorSP(3));
-	FR->SetInverted(true);
-	BR->SetInverted(true);
 	drive_left.reset(new TwoMotorOutput(BL, FL));
 	drive_right.reset(new TwoMotorOutput(BR, FR));
-	drive.reset(new RobotDrive(*FL, *BL, *FR, *BR));
+	drive_right->SetInverted(true);
+	drive.reset(new RobotDrive(drive_left, drive_right));
 	drive->SetExpiration(3);
 	left_controller.reset(new PIDController(P, I, D, DRIVE_CONTROLLER_KF, encoder_left.get(), drive_left.get()));
 	right_controller.reset(new PIDController(P, I, D, DRIVE_CONTROLLER_KF, encoder_right.get(), drive_right.get()));
@@ -73,4 +72,14 @@ void RobotMap::MoveClawsOut(){
 void RobotMap::MoveClawsIn(){
 	servo_left->SetAngle(195);
 	servo_right->SetAngle(0);
+}
+void RobotMap::SetWrenchEffort()
+{
+	drive_ctrl->Disable();
+	drive->SetSafetyEnabled(true);
+}
+void RobotMap::SetWrenchVelocity()
+{
+	drive->SetSafetyEnabled(false);
+	drive_ctrl->Enable();
 }

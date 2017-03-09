@@ -9,6 +9,7 @@
 #include <tf/tf.h>
 #include "UseRos.h"
 
+
 #ifdef USE_ROS
 class EncoderOdometry: public rosfrc::Updater
 #else
@@ -16,6 +17,7 @@ class EncoderOdometry
 #endif
 {
 private:
+	const double PI = 3.14159265359;
 	std::shared_ptr<frc::Encoder> m_left;
 	std::shared_ptr<frc::Encoder> m_right;
 	nav_msgs::Odometry odom_msg;
@@ -41,5 +43,9 @@ public:
 	void Reset();
 	void Reset(double x_i, double y_i, double th_i);
 	nav_msgs::Odometry Get();
+	double GetThetaDeg();
+	double GetX();
+	double GetY();
+	double GetTheta();
 	virtual ~EncoderOdometry(){};
 };

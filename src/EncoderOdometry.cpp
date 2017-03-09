@@ -122,3 +122,15 @@ nav_msgs::Odometry EncoderOdometry::Get()
 {
 	return odom_msg;
 }
+double EncoderOdometry::GetThetaDeg()
+{
+	return th*(180.0/PI);
+}
+double EncoderOdometry::GetX()
+{
+	return x;
+}
+double EncoderOdometry::GetY()
+{
+	return y;
+}

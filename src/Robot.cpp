@@ -18,6 +18,7 @@
 #include "Commands/DoNothing.h"
 #include "Commands/DriveForwardAuto.h"
 #include "Commands/CenterGear.h"
+#include "Commands/EncoderAuto.h"
 
 // FRC Stuff
 #include <RobotDrive.h>
@@ -68,10 +69,13 @@ class Robot: public rosfrc::RosRobot, RobotMap {
 #endif
 public:
 	SendableChooser<std::shared_ptr<Command>> auto_chooser;
+	std::shared_ptr<Command> autoCommand;
+	cs::UsbCamera cam;
+	double max_vel;
 	Robot()
 #ifdef USE_ROS
-		:
-			RosRobot(KEVIN_LAPTOP_IP)
+			:
+				RosRobot(KEVIN_LAPTOP_IP)
 #else
 
 #endif
@@ -90,34 +94,52 @@ public:
 		auto_chooser.AddObject ("Center Gear", std::shared_ptr<Command>(new CenterGear(0)));
 		auto_chooser.AddObject ("Center Gear Left", std::shared_ptr<Command>(new CenterGear(-1)));
 		auto_chooser.AddObject ("Center Gear Right", std::shared_ptr<Command>(new CenterGear(1)));
+		auto_chooser.AddObject ("Encoder", std::shared_ptr<Command>(new EncoderAuto(0)));
+		auto_chooser.AddObject ("Encoder Left", std::shared_ptr<Command>(new EncoderAuto(-1)));
+		auto_chooser.AddObject ("Encoder Right", std::shared_ptr<Command>(new EncoderAuto(1)));
 		SmartDashboard::PutData("Auto Program", &auto_chooser);
+
+		SmartDashboard::PutNumber("P", RobotMap::P);
+		SmartDashboard::PutNumber("D", RobotMap::D);
+		max_vel = 0.0;
+	}
+	void RobotInit() override
+	{
+		cam = CameraServer::GetInstance()->StartAutomaticCapture(0);
 	}
 	void AutonomousInit() override
 	{
 #ifdef USE_ROS
 		getNodeHandle().loginfo("Auto Begin");
 #endif
+		//TestInit();
+		if (autoCommand != nullptr) autoCommand->Cancel();
 		encoder_left->Reset();
 		encoder_right->Reset();
 		odom->Reset();
 		MoveClawsIn();
-		std::shared_ptr<Command> autoCommand = auto_chooser.GetSelected();
+		autoCommand = auto_chooser.GetSelected();
 		autoCommand->Start();
 	}
 	void AutonomousPeriodic() override
 	{
+
+		//TestPeriodic();
 		Scheduler::GetInstance()->Run();
 	}
 
 	void TeleopInit() override
 	{
+		encoder_left->Reset();
+		encoder_right->Reset();
+		odom->Reset();
 #ifdef USE_ROS
 		getNodeHandle().loginfo("Teleop Begin");
 #endif
 #ifdef USE_VEL_TELEOP
-		drive_ctrl->Enable();
+		SetWrenchVelocity();
 #else
-		drive_ctrl->Disable();
+		SetWrenchEffort();
 #endif
 		MoveClawsIn();
 	}
@@ -134,7 +156,8 @@ public:
 		double x = stickLeft->GetY();
 		double rotation = stickMiddle->GetX();
 		if (slow) s = 2;
-		drive->ArcadeDrive(rotation/s, x/s);
+		//drive->Drive(rotation/s, x/s);
+		drive->ArcadeDrive(rotation, x/s);
 #endif
 		if (stickLeft->GetRawButton(4)) climber->Set(-1);
 		else if (stickLeft->GetRawButton(5)) climber->Set(-0.25);
@@ -160,15 +183,21 @@ public:
 		getNodeHandle().loginfo("Test Begin");
 #endif
 
+		RobotMap::P = SmartDashboard::GetNumber("P", RobotMap::P);
+		RobotMap::D = SmartDashboard::GetNumber("D", RobotMap::D);
+		left_controller->SetPID(RobotMap::P, RobotMap::I, RobotMap::D);
+		right_controller->SetPID(RobotMap::P, RobotMap::I, RobotMap::D);
+		printf("P = %f, D= %f\n", P, D);
 		/* Tunning velocity PID
 		 * 1) Drive robot at max effort, record velocity
 		 * 2) Set velocity as feed forward to left + right controller
 		 * 3) kD is multiple of current velocity error
 		 * 4) kP is multiple of integrated velocity error
 		 */
-		drive_ctrl->Enable();
+		SetWrenchVelocity();
 		geometry_msgs::Twist twist_msg;
-		twist_msg.linear.x = 1.5;
+		//twist_msg.linear.x = 1.5;
+		twist_msg.angular.z = 3.141592654;
 		drive_ctrl->Set(twist_msg);
 
 	}
@@ -178,12 +207,24 @@ public:
 	}
 	void RobotPeriodic () override
 	{
+		if (encoder_left->GetRate() > max_vel) max_vel =encoder_left->GetRate();
+//		std::cout << "Cam: " << cam.IsConnected() << std::endl;
 #ifdef USE_ROS
 
 #else
 		odom->update();
-		printf("Encoder Left = %f\n", encoder_left->GetDistance());
-		printf("Encoder Right = %f\n\n", encoder_right->GetDistance());
+		SmartDashboard::PutNumber("Odom Theta", odom->GetThetaDeg());
+		SmartDashboard::PutNumber("Odom X", odom->GetX());
+		SmartDashboard::PutNumber("Odom Y", odom->GetY());
+		SmartDashboard::PutNumber("Encoder Left", encoder_left->GetDistance());
+		SmartDashboard::PutNumber("Encoder Right", encoder_right->GetDistance());
+		SmartDashboard::PutNumber("Encoder Left Rate", encoder_left->GetRate());
+		SmartDashboard::PutNumber("Encoder Right Rate", encoder_right->GetRate());
+		SmartDashboard::PutNumber("Left Goal",		left_controller->GetSetpoint());
+		SmartDashboard::PutNumber("Right Goal", right_controller->GetSetpoint());
+		SmartDashboard::PutNumber("Max", max_vel);
+		//printf("Encoder Left = %f\n", encoder_left->GetDistance());
+		//printf("Encoder Right = %f\n\n", encoder_right->GetDistance());
 #endif
 	}
 };

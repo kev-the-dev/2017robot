@@ -20,9 +20,9 @@ class RobotMap {
 public:
 	static constexpr double WHEEL_RADIUS_METERS = 0.077851;
 	static constexpr double CYCLES_PER_REVOLUTION = 360.0;
-	static constexpr double WHEEL_SEPERATION_METERS = 0.6096;
+	static constexpr double WHEEL_SEPERATION_METERS = 0.61595;
 	static constexpr double ENCODER_REVOLUTIONS_PER_OUTPUT_REVOLUTION = 11.25;
-	static constexpr double MAX_LINEAR_VELOCITY_METERS_PER_SECOND = 5.4;
+	static constexpr double MAX_LINEAR_VELOCITY_METERS_PER_SECOND = 3.4;
 	static constexpr double MAX_ANGULAR_VELOCITY = 6.0;
 
 	static constexpr double WHEEL_CIRCUMFERENCE_METERS = 2.0 * PI * WHEEL_RADIUS_METERS;
@@ -63,5 +63,7 @@ public:
 	void MoveClawsOut();
 	void MoveClawsIn();
 
+	void SetWrenchEffort();
+	void SetWrenchVelocity();
 };
 
